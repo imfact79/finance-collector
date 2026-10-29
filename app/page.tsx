@@ -1,20 +1,45 @@
 import { DatabaseIcon, TriangleAlertIcon } from "lucide-react";
 
+import { LimitCurve } from "@/components/recommendation/limit-curve";
 import { PeriodForm } from "@/components/recommendation/period-form";
-import { Disclaimer, RecommendationResults } from "@/components/recommendation/results";
+import {
+  Disclaimer,
+  RecommendationResults,
+  type WithinLimit,
+} from "@/components/recommendation/results";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { loadMonthlyStats } from "@/lib/market-stats";
 import {
+  DEFAULT_DRAWDOWN_LIMIT_PERCENT,
+  drawdownLimitCurve,
   MIN_PERIOD_MONTHS,
+  parseDrawdownLimitPercent,
   periodMonths,
   recommendWeights,
+  recommendWithinDrawdownLimit,
   type MonthlyStat,
 } from "@/lib/weight-simulation";
 
+function firstValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
 function pick(value: string | string[] | undefined, months: string[], fallback: string) {
-  const single = Array.isArray(value) ? value[0] : value;
+  const single = firstValue(value);
   return single && months.includes(single) ? single : fallback;
+}
+
+function toWithinLimit(
+  stats: MonthlyStat[],
+  period: { from: string; to: string },
+  limitPercent: number | null,
+): WithinLimit {
+  if (limitPercent === null) return { kind: "invalid" };
+  const outcome = recommendWithinDrawdownLimit(stats, period, limitPercent / 100);
+  return "result" in outcome
+    ? { kind: "ok", limitPercent, result: outcome.result }
+    : { kind: "infeasible", limitPercent, minDrawdown: outcome.minDrawdown };
 }
 
 async function load(): Promise<{ stats: MonthlyStat[] } | { error: string }> {
@@ -83,13 +108,21 @@ function Simulation({
   };
   const tooShort = periodMonths(period) < MIN_PERIOD_MONTHS;
 
+  const rawLimit = firstValue(params.mdd) ?? String(DEFAULT_DRAWDOWN_LIMIT_PERCENT);
+  const limitPercent = parseDrawdownLimitPercent(rawLimit);
+
   return (
     <>
       <section aria-labelledby="period-heading" className="flex flex-col gap-4">
         <h2 id="period-heading" className="font-heading text-xl font-semibold">
           시뮬레이션 기간
         </h2>
-        <PeriodForm months={months} from={period.from} to={period.to} />
+        <PeriodForm
+          months={months}
+          from={period.from}
+          to={period.to}
+          drawdownLimit={rawLimit}
+        />
       </section>
 
       <section aria-labelledby="result-heading" className="flex flex-col gap-4">
@@ -106,9 +139,27 @@ function Simulation({
             </AlertDescription>
           </Alert>
         ) : (
-          <RecommendationResults {...recommendWeights(stats, period)} />
+          <RecommendationResults
+            {...recommendWeights(stats, period)}
+            withinLimit={toWithinLimit(stats, period, limitPercent)}
+          />
         )}
       </section>
+
+      {tooShort ? null : (
+        <section aria-labelledby="curve-heading" className="flex flex-col gap-4">
+          <h2 id="curve-heading" className="font-heading text-xl font-semibold">
+            MDD 한도별 최고 수익률
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            한도를 1%p씩 바꿨을 때 이 기간에 얻을 수 있는 가장 높은 연환산 수익률입니다.
+          </p>
+          <LimitCurve
+            points={drawdownLimitCurve(stats, period)}
+            currentLimitPercent={limitPercent}
+          />
+        </section>
+      )}
 
       <Disclaimer lastMonth={lastMonth} />
     </>
