@@ -8,6 +8,10 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
+# Supabase 최신 문서
+
+Supabase 관련 작업(DB, Auth, 클라이언트, 마이그레이션)을 시작할 때 공식 `https://supabase.com/llms.txt`를 먼저 가져와 필요한 문서를 따라 읽는다. 내용을 저장소에 복사하지 않고, 설치된 `@supabase/supabase-js` 버전과 맞는지 대조해서 쓴다.
+
 # 아키텍처 핵심 원칙
 
 모든 구조 판단은 아래 5가지를 기준으로 한다.
